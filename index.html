@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Фотоальбом — подготовка к печати</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha512-/0zF0fGzPUxnnfI80ncHl9g+bR8uMenFAmpcBTCCaEDlz0UsBYJxLEXzmlXG0ofj3KWETFXCcbByrJKBSWDYfw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+</head>
+<body>
+  <header class="hero">
+    <div class="hero__body">
+      <div>
+        <p class="eyebrow">Альбом под печать</p>
+        <h1>Подготовьте фото так, чтобы было место для подписей</h1>
+        <p class="lead">Задайте размер страницы альбома, долю места для текста и отступы. Загрузите фото, настройте кадрирование и скачайте готовый пакет для типографии.</p>
+        <div class="controls-row">
+          <button id="prepareBtn" class="btn primary">Подготовить фото</button>
+          <button id="printBtn" class="btn ghost">Отправить на печать</button>
+        </div>
+      </div>
+      <div class="hero__card">
+        <h3>Параметры альбома</h3>
+        <div class="field-grid">
+          <label>Ширина страницы (мм)
+            <input id="albumWidth" type="number" min="50" value="210" />
+          </label>
+          <label>Высота страницы (мм)
+            <input id="albumHeight" type="number" min="50" value="210" />
+          </label>
+          <label>DPI печати
+            <input id="dpi" type="number" min="72" value="300" />
+          </label>
+          <label>Отступы (мм)
+            <input id="padding" type="number" min="0" value="5" />
+          </label>
+          <label>Место под текст (%)
+            <input id="textArea" type="range" min="5" max="50" value="22" />
+            <span class="range-value" id="textAreaValue">22%</span>
+          </label>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <section class="panel">
+      <div class="panel__header">
+        <div>
+          <p class="eyebrow">Фото</p>
+          <h2>Загрузите снимки</h2>
+          <p>Используйте drag-and-drop или кнопку выбора файлов. Поддерживаются JPG и PNG.</p>
+        </div>
+        <div class="controls-row">
+          <button id="selectBtn" class="btn">Выбрать файлы</button>
+          <label class="btn ghost" id="dropZone" for="fileInput">Перетащите сюда</label>
+          <input id="fileInput" type="file" multiple accept="image/*" hidden />
+        </div>
+      </div>
+      <div id="fileList" class="file-list">
+        <p class="muted">Пока нет загруженных фото.</p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel__header">
+        <div>
+          <p class="eyebrow">Предпросмотр альбома</p>
+          <h2>Проверьте кадрирование и текстовое поле</h2>
+          <p>Каждое изображение вписывается в доступную область, сохраняя пропорции. Серая зона снизу — место для подписей.</p>
+        </div>
+        <div id="status" class="status">Готово к подготовке.</div>
+      </div>
+      <div id="previewGrid" class="preview-grid">
+        <p class="muted">После нажатия «Подготовить фото» здесь появятся страницы альбома.</p>
+      </div>
+    </section>
+  </main>
+
+  <template id="previewCard">
+    <article class="card">
+      <header class="card__header">
+        <div>
+          <p class="eyebrow">Страница</p>
+          <h3 class="card__title"></h3>
+        </div>
+        <a class="btn small" target="_blank" rel="noreferrer">Скачать JPEG</a>
+      </header>
+      <div class="card__canvas"></div>
+      <p class="card__hint">Серая область остаётся пустой для заметок, белые отступы учитывают поля печати.</p>
+    </article>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
