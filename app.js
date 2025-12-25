@@ -12,8 +12,6 @@ const textAreaValue = document.getElementById('textAreaValue');
 const files = [];
 let preparedImages = [];
 
-const mmToPx = (mm, dpi) => (mm / 25.4) * dpi;
-
 function setStatus(message) {
   statusEl.textContent = message;
 }
@@ -69,66 +67,6 @@ textAreaInput.addEventListener('input', () => {
   textAreaValue.textContent = `${textAreaInput.value}%`;
 });
 
-function computeLayout(img, albumWidthPx, albumHeightPx, paddingPx, textAreaPercent) {
-  const textAreaHeight = Math.round((textAreaPercent / 100) * albumHeightPx);
-  const drawWidth = albumWidthPx - paddingPx * 2;
-  const drawHeight = albumHeightPx - textAreaHeight - paddingPx * 2;
-
-  const scale = Math.max(drawWidth / img.width, drawHeight / img.height);
-  const baseTargetWidth = Math.round(img.width * scale);
-  const baseTargetHeight = Math.round(img.height * scale);
-  const baseOffsetX = (drawWidth - baseTargetWidth) / 2;
-  const baseOffsetY = (drawHeight - baseTargetHeight) / 2;
-
-  return {
-    albumWidthPx,
-    albumHeightPx,
-    paddingPx,
-    textAreaPercent,
-    textAreaHeight,
-    drawWidth,
-    drawHeight,
-    baseTargetWidth,
-    baseTargetHeight,
-    targetWidth: baseTargetWidth,
-    targetHeight: baseTargetHeight,
-    baseOffsetX,
-    baseOffsetY,
-    offsetX: baseOffsetX,
-    offsetY: baseOffsetY,
-    scale: 1,
-  };
-}
-
-function clampOffsets(layout) {
-  const minX = layout.drawWidth - layout.targetWidth;
-  const minY = layout.drawHeight - layout.targetHeight;
-  layout.offsetX = Math.min(0, Math.max(minX, layout.offsetX));
-  layout.offsetY = Math.min(0, Math.max(minY, layout.offsetY));
-}
-
-function applyScale(layout, scalePercent) {
-  const newScale = Math.min(1.8, Math.max(0.6, scalePercent / 100));
-  const centerX = layout.offsetX + layout.targetWidth / 2;
-  const centerY = layout.offsetY + layout.targetHeight / 2;
-
-  layout.scale = newScale;
-  layout.targetWidth = Math.round(layout.baseTargetWidth * newScale);
-  layout.targetHeight = Math.round(layout.baseTargetHeight * newScale);
-  layout.offsetX = centerX - layout.targetWidth / 2;
-  layout.offsetY = centerY - layout.targetHeight / 2;
-  clampOffsets(layout);
-}
-
-function resetLayout(layout) {
-  layout.scale = 1;
-  layout.targetWidth = layout.baseTargetWidth;
-  layout.targetHeight = layout.baseTargetHeight;
-  layout.offsetX = layout.baseOffsetX;
-  layout.offsetY = layout.baseOffsetY;
-  clampOffsets(layout);
-}
-
 function updatePreviewPosition(imgEl, layout) {
   imgEl.style.width = `${(layout.targetWidth / layout.drawWidth) * 100}%`;
   imgEl.style.height = `${(layout.targetHeight / layout.drawHeight) * 100}%`;
@@ -137,16 +75,33 @@ function updatePreviewPosition(imgEl, layout) {
 }
 
 async function updatePreparedAsset(state) {
-  const canvas = drawToCanvas(state.img, state.layout);
-  const blob = await canvasToBlob(canvas);
-  const dataUrl = URL.createObjectURL(blob);
+  const canvas = drawPreviewCanvas(state.img, state.layout);
+  const photoOnlyCanvas = drawPhotoOnlyCanvas(state.img, state.layout);
+  const [previewBlob, photoBlob] = await Promise.all([
+    canvasToBlob(canvas),
+    canvasToBlob(photoOnlyCanvas),
+  ]);
+
+  const dataUrl = URL.createObjectURL(photoBlob);
+  const previewUrl = URL.createObjectURL(previewBlob);
+  const metadataBlob = new Blob([JSON.stringify(buildEditingMetadata(state), null, 2)], {
+    type: 'application/json',
+  });
+  const metadataUrl = URL.createObjectURL(metadataBlob);
 
   state.dataUrl && URL.revokeObjectURL(state.dataUrl);
+  state.previewUrl && URL.revokeObjectURL(state.previewUrl);
+  state.metaUrl && URL.revokeObjectURL(state.metaUrl);
+
   state.dataUrl = dataUrl;
-  state.blob = blob;
+  state.previewUrl = previewUrl;
+  state.metaUrl = metadataUrl;
+  state.blob = previewBlob;
+  state.printBlob = photoBlob;
 
   state.linkEl.href = dataUrl;
-  state.previewImg.src = dataUrl;
+  state.previewImg.src = previewUrl;
+  state.metaLinkEl.href = metadataUrl;
 }
 
 function attachDragging(photoArea, imgEl, state) {
@@ -301,7 +256,7 @@ async function loadImage(file) {
   });
 }
 
-function drawToCanvas(img, layout) {
+function drawPreviewCanvas(img, layout) {
   const {
     albumWidthPx,
     albumHeightPx,
@@ -356,6 +311,19 @@ function drawToCanvas(img, layout) {
   return canvas;
 }
 
+function drawPhotoOnlyCanvas(img, layout) {
+  const canvas = document.createElement('canvas');
+  canvas.width = layout.drawWidth;
+  canvas.height = layout.drawHeight;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, layout.offsetX, layout.offsetY, layout.targetWidth, layout.targetHeight);
+
+  return canvas;
+}
+
 function canvasToBlob(canvas) {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
@@ -376,9 +344,11 @@ async function prepareImages() {
 
   setStatus('Готовим страницы...');
   if (preparedImages.length) {
-    preparedImages.forEach(({ dataUrl, localUrl }) => {
+    preparedImages.forEach(({ dataUrl, localUrl, previewUrl, metaUrl }) => {
       if (dataUrl) URL.revokeObjectURL(dataUrl);
       if (localUrl) URL.revokeObjectURL(localUrl);
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      if (metaUrl) URL.revokeObjectURL(metaUrl);
     });
   }
   previewGrid.innerHTML = '';
@@ -404,14 +374,19 @@ async function prepareImages() {
       img,
       localUrl: dataUrl,
       dataUrl: null,
+      previewUrl: null,
+      metaUrl: null,
       blob: null,
+      printBlob: null,
       layout,
       linkEl: clone.querySelector('a'),
+      metaLinkEl: clone.querySelector('.card__meta-btn'),
       previewImg: document.createElement('img'),
       updateTimer: null,
     };
 
     state.linkEl.download = state.name;
+    state.metaLinkEl.download = `${state.name.replace(/\.jpg$/, '')}-metadata.json`;
     state.previewImg.alt = file.name;
     state.previewImg.className = 'card__preview-img';
 
@@ -464,10 +439,17 @@ async function sendToPrint() {
   const printLayout = landscapeLayout.capacity > portraitLayout.capacity ? landscapeLayout : portraitLayout;
   const itemsPerSheet = Math.max(1, printLayout.capacity);
 
-  const objectUrls = preparedImages.map((item) => ({
-    name: item.name,
-    url: URL.createObjectURL(item.blob),
-  }));
+  const objectUrls = preparedImages.map((item) => {
+    const payload = selectPrintSource(item);
+    const usingEdits = Boolean(item.printBlob);
+    const blob = payload instanceof Blob ? payload : null;
+    const url = blob ? URL.createObjectURL(blob) : URL.createObjectURL(item.file);
+    return {
+      name: item.name,
+      url,
+      source: usingEdits ? 'edited' : 'original',
+    };
+  });
 
   setStatus('Формируем макет для печати...');
 
