@@ -130,6 +130,18 @@ function drawToCanvas(img, options) {
   return canvas;
 }
 
+function canvasToBlob(canvas) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        resolve(blob);
+      } else {
+        reject(new Error('Не удалось создать файл изображения.'));
+      }
+    }, 'image/jpeg', 0.92);
+  });
+}
+
 async function prepareImages() {
   if (files.length === 0) {
     alert('Сначала загрузите фотографии.');
@@ -137,6 +149,9 @@ async function prepareImages() {
   }
 
   setStatus('Готовим страницы...');
+  if (preparedImages.length) {
+    preparedImages.forEach(({ dataUrl }) => URL.revokeObjectURL(dataUrl));
+  }
   previewGrid.innerHTML = '';
   preparedImages = [];
 
@@ -150,9 +165,8 @@ async function prepareImages() {
   for (const [index, file] of files.entries()) {
     const img = await loadImage(file);
     const canvas = drawToCanvas(img, { albumWidthPx, albumHeightPx, paddingPx, textAreaPercent });
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-    const response = await fetch(dataUrl);
-    const blob = await response.blob();
+    const blob = await canvasToBlob(canvas);
+    const dataUrl = URL.createObjectURL(blob);
 
     preparedImages.push({
       name: `prepared-${file.name.replace(/\.[^.]+$/, '')}.jpg`,
