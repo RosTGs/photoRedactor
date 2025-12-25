@@ -253,6 +253,13 @@ input[type='range'] {
   gap: 12px;
 }
 
+.card__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .card__title {
   margin: 0;
 }
@@ -274,6 +281,44 @@ input[type='range'] {
   color: var(--muted);
   font-size: 14px;
   margin: 0;
+}
+
+.edit-panel {
+  border: 1px dashed var(--border);
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 12px;
+}
+
+.edit-panel__controls {
+  display: grid;
+  gap: 8px;
+  align-items: center;
+}
+
+.edit-panel__label {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.edit-panel__hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.edit-scale__value {
+  display: inline-block;
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.edit-panel.is-collapsed {
+  display: none;
 }
 
 .card__thumb {
@@ -368,4 +413,10 @@ input[type='range'] {
   padding: 4px 8px;
   border-radius: 6px;
   border: 1px solid var(--border);
+}
+
+@media (max-width: 720px) {
+  .edit-panel {
+    grid-template-columns: 1fr;
+  }
 }
