@@ -76,6 +76,24 @@
         <p class="muted">После нажатия «Подготовить фото» здесь появятся страницы альбома.</p>
       </div>
     </section>
+
+    <section class="panel">
+      <div class="panel__header">
+        <div>
+          <p class="eyebrow">Этап 3 — лист A4</p>
+          <h2>Проверьте макет в натуральном размере</h2>
+          <p>Кропнутая фотография автоматически размещается на листе A4 с учётом выбранных размеров страницы. Макет помогает
+            увидеть реальное расположение кадров, как если бы вы собирали лист в редакторе вроде Photoshop.</p>
+        </div>
+        <div class="panel__actions">
+          <div id="sheetStatus" class="status status--muted">Лист A4 ещё не собран</div>
+          <button id="refreshSheetBtn" class="btn ghost small" type="button">Обновить макет</button>
+        </div>
+      </div>
+      <div id="sheetPreview" class="sheet-preview-wrapper">
+        <p class="muted">Сначала подготовьте фото, чтобы увидеть макет листа.</p>
+      </div>
+    </section>
   </main>
 
   <template id="previewCard">

@@ -62,6 +62,26 @@ function resetLayout(layout) {
   clampOffsets(layout);
 }
 
+function computePrintLayout(albumWidthMm, albumHeightMm, options = {}) {
+  const marginMm = options.marginMm ?? 10;
+  const gapMm = options.gapMm ?? 6;
+  const a4Portrait = { width: 210, height: 297, orientation: 'portrait' };
+  const a4Landscape = { width: 297, height: 210, orientation: 'landscape' };
+
+  const computePacking = (page) => {
+    const innerWidth = page.width - marginMm * 2;
+    const innerHeight = page.height - marginMm * 2;
+    const columns = Math.max(1, Math.floor((innerWidth + gapMm) / (albumWidthMm + gapMm)));
+    const rows = Math.max(1, Math.floor((innerHeight + gapMm) / (albumHeightMm + gapMm)));
+    return { ...page, columns, rows, capacity: columns * rows, marginMm, gapMm };
+  };
+
+  const portraitLayout = computePacking(a4Portrait);
+  const landscapeLayout = computePacking(a4Landscape);
+
+  return landscapeLayout.capacity > portraitLayout.capacity ? landscapeLayout : portraitLayout;
+}
+
 function buildEditingMetadata(state) {
   return {
     originalFileName: state.file?.name,
@@ -94,6 +114,7 @@ if (typeof module !== 'undefined') {
     clampOffsets,
     applyScale,
     resetLayout,
+    computePrintLayout,
     buildEditingMetadata,
     selectPrintSource,
   };

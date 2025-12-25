@@ -1,5 +1,12 @@
 const assert = require('assert');
-const { buildEditingMetadata, selectPrintSource, computeLayout, resetLayout, applyScale } = require('../processing.js');
+const {
+  buildEditingMetadata,
+  selectPrintSource,
+  computeLayout,
+  resetLayout,
+  applyScale,
+  computePrintLayout,
+} = require('../processing.js');
 
 function createLayoutStub() {
   const img = { width: 4000, height: 3000 };
@@ -44,6 +51,14 @@ function createLayoutStub() {
   assert.ok(layout.offsetX <= 0 && layout.offsetY <= 0, 'offsets should stay within drawable area');
   resetLayout(layout);
   assert.strictEqual(layout.scale, 1, 'reset should bring scale back to default');
+})();
+
+(function testPrintLayoutChoosesBestOrientation() {
+  const layout = computePrintLayout(210, 260, { marginMm: 8, gapMm: 5 });
+  assert.ok(['portrait', 'landscape'].includes(layout.orientation), 'orientation should be set');
+  assert.strictEqual(layout.marginMm, 8, 'custom margin should be preserved');
+  assert.strictEqual(layout.gapMm, 5, 'custom gap should be preserved');
+  assert.ok(layout.capacity >= 1, 'capacity should be positive');
 })();
 
 console.log('All tests passed.');
