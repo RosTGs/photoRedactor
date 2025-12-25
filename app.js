@@ -8,6 +8,9 @@ const previewGrid = document.getElementById('previewGrid');
 const statusEl = document.getElementById('status');
 const textAreaInput = document.getElementById('textArea');
 const textAreaValue = document.getElementById('textAreaValue');
+const sheetPreview = document.getElementById('sheetPreview');
+const sheetStatus = document.getElementById('sheetStatus');
+const refreshSheetBtn = document.getElementById('refreshSheetBtn');
 
 const files = [];
 let preparedImages = [];
@@ -102,6 +105,71 @@ async function updatePreparedAsset(state) {
   state.linkEl.href = dataUrl;
   state.previewImg.src = previewUrl;
   state.metaLinkEl.href = metadataUrl;
+
+  renderSheetPreview();
+}
+
+function renderSheetPreview() {
+  if (!sheetPreview || !sheetStatus) return;
+
+  if (preparedImages.length === 0) {
+    sheetPreview.innerHTML = '<p class="muted">Сначала подготовьте фото, чтобы увидеть, как они ложатся на A4.</p>';
+    sheetStatus.textContent = 'Лист A4 ещё не собран';
+    return;
+  }
+
+  const albumWidthMm = Number(document.getElementById('albumWidth').value);
+  const albumHeightMm = Number(document.getElementById('albumHeight').value);
+  const printLayout = computePrintLayout(albumWidthMm, albumHeightMm);
+  const itemsPerSheet = Math.max(1, printLayout.capacity);
+  const totalSheets = Math.ceil(preparedImages.length / itemsPerSheet);
+
+  sheetPreview.innerHTML = '';
+
+  const sheet = document.createElement('div');
+  sheet.className = `sheet-preview sheet-preview--${printLayout.orientation}`;
+  sheet.style.aspectRatio = `${printLayout.width} / ${printLayout.height}`;
+
+  const grid = document.createElement('div');
+  grid.className = 'sheet-preview__grid';
+  grid.style.height = '100%';
+
+  const columnWidth = (albumWidthMm / printLayout.width) * 100;
+  const rowHeight = (albumHeightMm / printLayout.height) * 100;
+  const columnGap = (printLayout.gapMm / printLayout.width) * 100;
+  const rowGap = (printLayout.gapMm / printLayout.height) * 100;
+
+  grid.style.gridTemplateColumns = `repeat(${printLayout.columns}, ${columnWidth}%)`;
+  grid.style.gridAutoRows = `${rowHeight}%`;
+  grid.style.columnGap = `${columnGap}%`;
+  grid.style.rowGap = `${rowGap}%`;
+
+  preparedImages.slice(0, itemsPerSheet).forEach((item) => {
+    const cell = document.createElement('figure');
+    cell.className = 'sheet-preview__cell';
+    const img = document.createElement('img');
+    img.src = item.dataUrl || item.previewUrl || item.localUrl;
+    img.alt = item.name;
+    cell.appendChild(img);
+    grid.appendChild(cell);
+  });
+
+  const legend = document.createElement('div');
+  legend.className = 'sheet-preview__legend';
+  legend.textContent = `A4 ${printLayout.orientation === 'portrait' ? 'книжная' : 'альбомная'} · ${printLayout.columns} × ${printLayout.rows} кадров · ${preparedImages.length} фото → ${totalSheets} лист.`;
+
+  sheet.appendChild(grid);
+  sheet.appendChild(legend);
+
+  if (totalSheets > 1) {
+    const hint = document.createElement('p');
+    hint.className = 'sheet-preview__hint';
+    hint.textContent = 'Показан первый лист. В печать уйдут все подготовленные фото с сохранением масштабов.';
+    sheet.appendChild(hint);
+  }
+
+  sheetPreview.appendChild(sheet);
+  sheetStatus.textContent = 'Макет A4 обновлён';
 }
 
 function attachDragging(photoArea, imgEl, state) {
@@ -353,6 +421,7 @@ async function prepareImages() {
   }
   previewGrid.innerHTML = '';
   preparedImages = [];
+  renderSheetPreview();
 
   const albumWidthPx = Math.round(mmToPx(Number(document.getElementById('albumWidth').value), Number(document.getElementById('dpi').value)));
   const albumHeightPx = Math.round(mmToPx(Number(document.getElementById('albumHeight').value), Number(document.getElementById('dpi').value)));
@@ -420,23 +489,7 @@ async function sendToPrint() {
 
   const albumWidthMm = Number(document.getElementById('albumWidth').value);
   const albumHeightMm = Number(document.getElementById('albumHeight').value);
-
-  const marginMm = 10;
-  const gapMm = 6;
-  const a4Portrait = { width: 210, height: 297, orientation: 'portrait' };
-  const a4Landscape = { width: 297, height: 210, orientation: 'landscape' };
-
-  const computePacking = (page) => {
-    const innerWidth = page.width - marginMm * 2;
-    const innerHeight = page.height - marginMm * 2;
-    const columns = Math.max(1, Math.floor((innerWidth + gapMm) / (albumWidthMm + gapMm)));
-    const rows = Math.max(1, Math.floor((innerHeight + gapMm) / (albumHeightMm + gapMm)));
-    return { ...page, columns, rows, capacity: columns * rows };
-  };
-
-  const portraitLayout = computePacking(a4Portrait);
-  const landscapeLayout = computePacking(a4Landscape);
-  const printLayout = landscapeLayout.capacity > portraitLayout.capacity ? landscapeLayout : portraitLayout;
+  const printLayout = computePrintLayout(albumWidthMm, albumHeightMm);
   const itemsPerSheet = Math.max(1, printLayout.capacity);
 
   const objectUrls = preparedImages.map((item) => {
@@ -465,11 +518,11 @@ async function sendToPrint() {
       <style>
         @page {
           size: A4 ${printLayout.orientation};
-          margin: ${marginMm}mm;
+          margin: ${printLayout.marginMm}mm;
         }
         body {
           margin: 0;
-          padding: ${marginMm}mm;
+          padding: ${printLayout.marginMm}mm;
           background: #f8fafc;
           font-family: 'Inter', system-ui, -apple-system, sans-serif;
         }
@@ -484,7 +537,7 @@ async function sendToPrint() {
           display: grid;
           grid-template-columns: repeat(${printLayout.columns}, ${albumWidthMm}mm);
           grid-auto-rows: ${albumHeightMm}mm;
-          gap: ${gapMm}mm;
+          gap: ${printLayout.gapMm}mm;
         }
         .cell {
           border: 1px solid #d4d4d8;
@@ -534,6 +587,8 @@ async function sendToPrint() {
 
 prepareBtn.addEventListener('click', prepareImages);
 printBtn.addEventListener('click', sendToPrint);
+refreshSheetBtn?.addEventListener('click', renderSheetPreview);
 
 renderFileList();
 setStatus('Готово к подготовке.');
+renderSheetPreview();
