@@ -443,19 +443,111 @@ async function sendToPrint() {
     }
   }
 
-  const zip = new JSZip();
-  preparedImages.forEach((item) => {
-    zip.file(item.name, item.blob);
-  });
+  const albumWidthMm = Number(document.getElementById('albumWidth').value);
+  const albumHeightMm = Number(document.getElementById('albumHeight').value);
 
-  setStatus('Формируем архив для печати...');
-  const zipContent = await zip.generateAsync({ type: 'blob' });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(zipContent);
-  link.download = 'album-ready.zip';
-  link.click();
-  URL.revokeObjectURL(link.href);
-  setStatus('Архив готов и скачан.');
+  const marginMm = 10;
+  const gapMm = 6;
+  const a4Portrait = { width: 210, height: 297, orientation: 'portrait' };
+  const a4Landscape = { width: 297, height: 210, orientation: 'landscape' };
+
+  const computePacking = (page) => {
+    const innerWidth = page.width - marginMm * 2;
+    const innerHeight = page.height - marginMm * 2;
+    const columns = Math.max(1, Math.floor((innerWidth + gapMm) / (albumWidthMm + gapMm)));
+    const rows = Math.max(1, Math.floor((innerHeight + gapMm) / (albumHeightMm + gapMm)));
+    return { ...page, columns, rows, capacity: columns * rows };
+  };
+
+  const portraitLayout = computePacking(a4Portrait);
+  const landscapeLayout = computePacking(a4Landscape);
+  const printLayout = landscapeLayout.capacity > portraitLayout.capacity ? landscapeLayout : portraitLayout;
+  const itemsPerSheet = Math.max(1, printLayout.capacity);
+
+  const objectUrls = preparedImages.map((item) => ({
+    name: item.name,
+    url: URL.createObjectURL(item.blob),
+  }));
+
+  setStatus('Формируем макет для печати...');
+
+  const printWindow = window.open('', '_blank');
+  const doc = printWindow.document;
+  const totalSheets = Math.ceil(objectUrls.length / itemsPerSheet);
+
+  doc.write(`<!doctype html>
+    <html lang="ru">
+    <head>
+      <meta charset="UTF-8" />
+      <title>Печать альбома</title>
+      <style>
+        @page {
+          size: A4 ${printLayout.orientation};
+          margin: ${marginMm}mm;
+        }
+        body {
+          margin: 0;
+          padding: ${marginMm}mm;
+          background: #f8fafc;
+          font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+        .sheet {
+          width: ${printLayout.width}mm;
+          min-height: ${printLayout.height}mm;
+          page-break-after: always;
+          box-sizing: border-box;
+        }
+        .sheet:last-child { page-break-after: auto; }
+        .grid {
+          display: grid;
+          grid-template-columns: repeat(${printLayout.columns}, ${albumWidthMm}mm);
+          grid-auto-rows: ${albumHeightMm}mm;
+          gap: ${gapMm}mm;
+        }
+        .cell {
+          border: 1px solid #d4d4d8;
+          border-radius: 6px;
+          overflow: hidden;
+          background: white;
+          box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .cell img {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+        }
+      </style>
+    </head>
+    <body>
+  `);
+
+  for (let sheetIndex = 0; sheetIndex < totalSheets; sheetIndex++) {
+    doc.write('<section class="sheet"><div class="grid">');
+    objectUrls
+      .slice(sheetIndex * itemsPerSheet, (sheetIndex + 1) * itemsPerSheet)
+      .forEach((item) => {
+        doc.write(`<figure class="cell"><img src="${item.url}" alt="${item.name}" /></figure>`);
+      });
+    doc.write('</div></section>');
+  }
+
+  doc.write(`
+      <script>
+        const objectUrls = ${JSON.stringify(objectUrls.map((item) => item.url))};
+        function revoke() { objectUrls.forEach((url) => URL.revokeObjectURL(url)); }
+        window.addEventListener('afterprint', () => { revoke(); window.close(); });
+        window.addEventListener('beforeunload', revoke);
+        const images = Array.from(document.images);
+        Promise.all(images.map((img) => img.complete ? Promise.resolve() : new Promise((resolve) => { img.onload = resolve; img.onerror = resolve; })))
+          .then(() => { window.focus(); window.print(); });
+      <\/script>
+    </body></html>`);
+
+  doc.close();
+  setStatus('Макет отправлен в печать.');
 }
 
 prepareBtn.addEventListener('click', prepareImages);
