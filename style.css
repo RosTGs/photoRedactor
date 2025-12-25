@@ -92,6 +92,13 @@ p {
   align-items: flex-start;
 }
 
+.panel__actions {
+  display: grid;
+  gap: 10px;
+  align-items: center;
+  justify-items: end;
+}
+
 .field-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));

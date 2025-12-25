@@ -14,10 +14,6 @@
         <p class="eyebrow">Альбом под печать</p>
         <h1>Подготовьте фото так, чтобы было место для подписей</h1>
         <p class="lead">Задайте размер страницы альбома, долю места для текста и отступы. Загрузите фото, настройте кадрирование и скачайте готовый пакет для типографии.</p>
-        <div class="controls-row">
-          <button id="prepareBtn" class="btn primary">Подготовить фото</button>
-          <button id="printBtn" class="btn ghost">Отправить на печать</button>
-        </div>
       </div>
       <div class="hero__card">
         <h3>Параметры альбома</h3>
@@ -69,7 +65,13 @@
           <h2>Проверьте кадрирование и текстовое поле</h2>
           <p>Каждая страница отображается в масштабе: тяните фото внутри белой области, чтобы увидеть, как оно ляжет на лист. Серая зона снизу — место для подписей.</p>
         </div>
-        <div id="status" class="status">Готово к подготовке.</div>
+        <div class="panel__actions">
+          <div id="status" class="status">Готово к подготовке.</div>
+          <div class="controls-row">
+            <button id="prepareBtn" class="btn primary">Подготовить фото</button>
+            <button id="printBtn" class="btn ghost">Отправить на печать</button>
+          </div>
+        </div>
       </div>
       <div id="previewGrid" class="preview-grid">
         <p class="muted">После нажатия «Подготовить фото» здесь появятся страницы альбома.</p>
