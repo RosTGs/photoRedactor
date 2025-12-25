@@ -86,9 +86,28 @@
           <p class="eyebrow">Страница</p>
           <h3 class="card__title"></h3>
         </div>
-        <a class="btn small" target="_blank" rel="noreferrer">Скачать JPEG</a>
+        <div class="card__header-actions">
+          <button class="btn small ghost card__edit-btn" type="button">Редактировать лист</button>
+          <a class="btn small" target="_blank" rel="noreferrer">Скачать JPEG</a>
+        </div>
       </header>
       <div class="card__canvas"></div>
+      <div class="edit-panel">
+        <div>
+          <p class="eyebrow">Кадрирование</p>
+          <p class="edit-panel__hint">Перемещайте фото внутри белой области и регулируйте масштаб, чтобы точнее вписать кадр.</p>
+        </div>
+        <div class="edit-panel__controls">
+          <label class="edit-panel__label">Масштаб фото
+            <input type="range" min="60" max="180" value="100" class="edit-scale" />
+            <span class="edit-scale__value">100%</span>
+          </label>
+          <div class="controls-row">
+            <button class="btn small ghost edit-reset" type="button">Сбросить</button>
+            <button class="btn small primary edit-apply" type="button">Готово</button>
+          </div>
+        </div>
+      </div>
       <p class="card__hint">Серая область остаётся пустой для заметок, белые отступы учитывают поля печати.</p>
     </article>
   </template>

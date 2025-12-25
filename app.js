@@ -75,10 +75,10 @@ function computeLayout(img, albumWidthPx, albumHeightPx, paddingPx, textAreaPerc
   const drawHeight = albumHeightPx - textAreaHeight - paddingPx * 2;
 
   const scale = Math.max(drawWidth / img.width, drawHeight / img.height);
-  const targetWidth = Math.round(img.width * scale);
-  const targetHeight = Math.round(img.height * scale);
-  const offsetX = (drawWidth - targetWidth) / 2;
-  const offsetY = (drawHeight - targetHeight) / 2;
+  const baseTargetWidth = Math.round(img.width * scale);
+  const baseTargetHeight = Math.round(img.height * scale);
+  const baseOffsetX = (drawWidth - baseTargetWidth) / 2;
+  const baseOffsetY = (drawHeight - baseTargetHeight) / 2;
 
   return {
     albumWidthPx,
@@ -88,10 +88,15 @@ function computeLayout(img, albumWidthPx, albumHeightPx, paddingPx, textAreaPerc
     textAreaHeight,
     drawWidth,
     drawHeight,
-    targetWidth,
-    targetHeight,
-    offsetX,
-    offsetY,
+    baseTargetWidth,
+    baseTargetHeight,
+    targetWidth: baseTargetWidth,
+    targetHeight: baseTargetHeight,
+    baseOffsetX,
+    baseOffsetY,
+    offsetX: baseOffsetX,
+    offsetY: baseOffsetY,
+    scale: 1,
   };
 }
 
@@ -100,6 +105,28 @@ function clampOffsets(layout) {
   const minY = layout.drawHeight - layout.targetHeight;
   layout.offsetX = Math.min(0, Math.max(minX, layout.offsetX));
   layout.offsetY = Math.min(0, Math.max(minY, layout.offsetY));
+}
+
+function applyScale(layout, scalePercent) {
+  const newScale = Math.min(1.8, Math.max(0.6, scalePercent / 100));
+  const centerX = layout.offsetX + layout.targetWidth / 2;
+  const centerY = layout.offsetY + layout.targetHeight / 2;
+
+  layout.scale = newScale;
+  layout.targetWidth = Math.round(layout.baseTargetWidth * newScale);
+  layout.targetHeight = Math.round(layout.baseTargetHeight * newScale);
+  layout.offsetX = centerX - layout.targetWidth / 2;
+  layout.offsetY = centerY - layout.targetHeight / 2;
+  clampOffsets(layout);
+}
+
+function resetLayout(layout) {
+  layout.scale = 1;
+  layout.targetWidth = layout.baseTargetWidth;
+  layout.targetHeight = layout.baseTargetHeight;
+  layout.offsetX = layout.baseOffsetX;
+  layout.offsetY = layout.baseOffsetY;
+  clampOffsets(layout);
 }
 
 function updatePreviewPosition(imgEl, layout) {
@@ -161,6 +188,71 @@ function attachDragging(photoArea, imgEl, state) {
   photoArea.addEventListener('pointerleave', handlePointerUp);
 }
 
+function attachEditControls(state, clone, photoArea, imgEl) {
+  const editPanel = clone.querySelector('.edit-panel');
+  const editBtn = clone.querySelector('.card__edit-btn');
+  const scaleInput = clone.querySelector('.edit-scale');
+  const scaleValue = clone.querySelector('.edit-scale__value');
+  const resetBtn = clone.querySelector('.edit-reset');
+  const applyBtn = clone.querySelector('.edit-apply');
+  const card = clone.querySelector('.card');
+
+  const setScaleValue = () => {
+    scaleValue.textContent = `${Math.round(state.layout.scale * 100)}%`;
+  };
+
+  const scheduleAssetUpdate = () => {
+    clearTimeout(state.updateTimer);
+    state.updateTimer = setTimeout(() => updatePreparedAsset(state), 140);
+  };
+
+  const openPanel = () => {
+    editPanel.classList.remove('is-collapsed');
+    card.classList.add('is-editing');
+    editBtn.textContent = 'Закрыть редактор';
+  };
+
+  const closePanel = () => {
+    editPanel.classList.add('is-collapsed');
+    card.classList.remove('is-editing');
+    editBtn.textContent = 'Редактировать лист';
+  };
+
+  const handleScaleChange = (value) => {
+    applyScale(state.layout, Number(value));
+    updatePreviewPosition(imgEl, state.layout);
+    setScaleValue();
+    scheduleAssetUpdate();
+  };
+
+  scaleInput.addEventListener('input', (e) => handleScaleChange(e.target.value));
+
+  resetBtn.addEventListener('click', () => {
+    resetLayout(state.layout);
+    scaleInput.value = 100;
+    updatePreviewPosition(imgEl, state.layout);
+    setScaleValue();
+    updatePreparedAsset(state);
+  });
+
+  applyBtn.addEventListener('click', () => {
+    closePanel();
+    updatePreparedAsset(state);
+  });
+
+  editBtn.addEventListener('click', () => {
+    if (editPanel.classList.contains('is-collapsed')) {
+      openPanel();
+    } else {
+      closePanel();
+    }
+  });
+
+  scaleInput.value = Math.round(state.layout.scale * 100);
+  setScaleValue();
+  closePanel();
+}
+
 function buildInteractivePreview(state, clone) {
   const canvasContainer = clone.querySelector('.card__canvas');
   canvasContainer.innerHTML = '';
@@ -194,6 +286,10 @@ function buildInteractivePreview(state, clone) {
   canvasContainer.appendChild(page);
 
   attachDragging(photoArea, imgEl, state);
+
+  attachEditControls(state, clone, photoArea, imgEl);
+
+  return { photoArea, imgEl };
 }
 
 async function loadImage(file) {
@@ -312,6 +408,7 @@ async function prepareImages() {
       layout,
       linkEl: clone.querySelector('a'),
       previewImg: document.createElement('img'),
+      updateTimer: null,
     };
 
     state.linkEl.download = state.name;
