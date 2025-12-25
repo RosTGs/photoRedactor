@@ -69,6 +69,133 @@ textAreaInput.addEventListener('input', () => {
   textAreaValue.textContent = `${textAreaInput.value}%`;
 });
 
+function computeLayout(img, albumWidthPx, albumHeightPx, paddingPx, textAreaPercent) {
+  const textAreaHeight = Math.round((textAreaPercent / 100) * albumHeightPx);
+  const drawWidth = albumWidthPx - paddingPx * 2;
+  const drawHeight = albumHeightPx - textAreaHeight - paddingPx * 2;
+
+  const scale = Math.max(drawWidth / img.width, drawHeight / img.height);
+  const targetWidth = Math.round(img.width * scale);
+  const targetHeight = Math.round(img.height * scale);
+  const offsetX = (drawWidth - targetWidth) / 2;
+  const offsetY = (drawHeight - targetHeight) / 2;
+
+  return {
+    albumWidthPx,
+    albumHeightPx,
+    paddingPx,
+    textAreaPercent,
+    textAreaHeight,
+    drawWidth,
+    drawHeight,
+    targetWidth,
+    targetHeight,
+    offsetX,
+    offsetY,
+  };
+}
+
+function clampOffsets(layout) {
+  const minX = layout.drawWidth - layout.targetWidth;
+  const minY = layout.drawHeight - layout.targetHeight;
+  layout.offsetX = Math.min(0, Math.max(minX, layout.offsetX));
+  layout.offsetY = Math.min(0, Math.max(minY, layout.offsetY));
+}
+
+function updatePreviewPosition(imgEl, layout) {
+  imgEl.style.width = `${(layout.targetWidth / layout.drawWidth) * 100}%`;
+  imgEl.style.height = `${(layout.targetHeight / layout.drawHeight) * 100}%`;
+  imgEl.style.left = `${(layout.offsetX / layout.drawWidth) * 100}%`;
+  imgEl.style.top = `${(layout.offsetY / layout.drawHeight) * 100}%`;
+}
+
+async function updatePreparedAsset(state) {
+  const canvas = drawToCanvas(state.img, state.layout);
+  const blob = await canvasToBlob(canvas);
+  const dataUrl = URL.createObjectURL(blob);
+
+  state.dataUrl && URL.revokeObjectURL(state.dataUrl);
+  state.dataUrl = dataUrl;
+  state.blob = blob;
+
+  state.linkEl.href = dataUrl;
+  state.previewImg.src = dataUrl;
+}
+
+function attachDragging(photoArea, imgEl, state) {
+  let isDragging = false;
+  let lastX = 0;
+  let lastY = 0;
+
+  const handlePointerDown = (e) => {
+    isDragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    photoArea.setPointerCapture(e.pointerId);
+    photoArea.classList.add('is-dragging');
+  };
+
+  const handlePointerMove = (e) => {
+    if (!isDragging) return;
+    const rect = photoArea.getBoundingClientRect();
+    const dx = (e.clientX - lastX) * (state.layout.drawWidth / rect.width);
+    const dy = (e.clientY - lastY) * (state.layout.drawHeight / rect.height);
+    state.layout.offsetX += dx;
+    state.layout.offsetY += dy;
+    clampOffsets(state.layout);
+    updatePreviewPosition(imgEl, state.layout);
+    lastX = e.clientX;
+    lastY = e.clientY;
+  };
+
+  const handlePointerUp = () => {
+    if (!isDragging) return;
+    isDragging = false;
+    photoArea.classList.remove('is-dragging');
+    updatePreparedAsset(state);
+  };
+
+  photoArea.addEventListener('pointerdown', handlePointerDown);
+  photoArea.addEventListener('pointermove', handlePointerMove);
+  photoArea.addEventListener('pointerup', handlePointerUp);
+  photoArea.addEventListener('pointerleave', handlePointerUp);
+}
+
+function buildInteractivePreview(state, clone) {
+  const canvasContainer = clone.querySelector('.card__canvas');
+  canvasContainer.innerHTML = '';
+
+  const page = document.createElement('div');
+  page.className = 'page-preview';
+  page.style.aspectRatio = `${state.layout.albumWidthPx} / ${state.layout.albumHeightPx}`;
+
+  const photoArea = document.createElement('div');
+  photoArea.className = 'page-preview__photo';
+  photoArea.style.left = `${(state.layout.paddingPx / state.layout.albumWidthPx) * 100}%`;
+  photoArea.style.top = `${(state.layout.paddingPx / state.layout.albumHeightPx) * 100}%`;
+  photoArea.style.width = `${(state.layout.drawWidth / state.layout.albumWidthPx) * 100}%`;
+  photoArea.style.height = `${(state.layout.drawHeight / state.layout.albumHeightPx) * 100}%`;
+
+  const imgEl = document.createElement('img');
+  imgEl.src = state.localUrl;
+  imgEl.alt = state.file.name;
+  imgEl.className = 'page-preview__img';
+  imgEl.draggable = false;
+  updatePreviewPosition(imgEl, state.layout);
+
+  const textArea = document.createElement('div');
+  textArea.className = 'page-preview__text';
+  textArea.style.height = `${(state.layout.textAreaHeight / state.layout.albumHeightPx) * 100}%`;
+  textArea.innerHTML = '<span>Место под подписи и заметки</span>';
+
+  photoArea.appendChild(imgEl);
+  page.appendChild(photoArea);
+  page.appendChild(textArea);
+  canvasContainer.appendChild(page);
+
+  attachDragging(photoArea, imgEl, state);
+}
+
 async function loadImage(file) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -78,8 +205,19 @@ async function loadImage(file) {
   });
 }
 
-function drawToCanvas(img, options) {
-  const { albumWidthPx, albumHeightPx, paddingPx, textAreaPercent } = options;
+function drawToCanvas(img, layout) {
+  const {
+    albumWidthPx,
+    albumHeightPx,
+    paddingPx,
+    textAreaPercent,
+    drawWidth,
+    drawHeight,
+    targetWidth,
+    targetHeight,
+    offsetX,
+    offsetY,
+  } = layout;
 
   const canvas = document.createElement('canvas');
   canvas.width = albumWidthPx;
@@ -90,20 +228,12 @@ function drawToCanvas(img, options) {
   ctx.fillRect(0, 0, albumWidthPx, albumHeightPx);
 
   const textAreaHeight = Math.round((textAreaPercent / 100) * albumHeightPx);
-  const drawWidth = albumWidthPx - paddingPx * 2;
-  const drawHeight = albumHeightPx - textAreaHeight - paddingPx * 2;
-
-  const scale = Math.min(drawWidth / img.width, drawHeight / img.height);
-  const targetWidth = Math.round(img.width * scale);
-  const targetHeight = Math.round(img.height * scale);
-  const offsetX = paddingPx + (drawWidth - targetWidth) / 2;
-  const offsetY = paddingPx + (drawHeight - targetHeight) / 2;
 
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.08)';
   ctx.shadowBlur = 12;
   ctx.shadowOffsetY = 6;
-  ctx.drawImage(img, offsetX, offsetY, targetWidth, targetHeight);
+  ctx.drawImage(img, paddingPx + offsetX, paddingPx + offsetY, targetWidth, targetHeight);
   ctx.restore();
 
   const textTop = albumHeightPx - textAreaHeight;
@@ -150,7 +280,10 @@ async function prepareImages() {
 
   setStatus('Готовим страницы...');
   if (preparedImages.length) {
-    preparedImages.forEach(({ dataUrl }) => URL.revokeObjectURL(dataUrl));
+    preparedImages.forEach(({ dataUrl, localUrl }) => {
+      if (dataUrl) URL.revokeObjectURL(dataUrl);
+      if (localUrl) URL.revokeObjectURL(localUrl);
+    });
   }
   previewGrid.innerHTML = '';
   preparedImages = [];
@@ -164,29 +297,37 @@ async function prepareImages() {
 
   for (const [index, file] of files.entries()) {
     const img = await loadImage(file);
-    const canvas = drawToCanvas(img, { albumWidthPx, albumHeightPx, paddingPx, textAreaPercent });
-    const blob = await canvasToBlob(canvas);
-    const dataUrl = URL.createObjectURL(blob);
-
-    preparedImages.push({
-      name: `prepared-${file.name.replace(/\.[^.]+$/, '')}.jpg`,
-      dataUrl,
-      blob,
-    });
-
+    const layout = computeLayout(img, albumWidthPx, albumHeightPx, paddingPx, textAreaPercent);
+    const dataUrl = URL.createObjectURL(file);
     const clone = template.content.cloneNode(true);
     clone.querySelector('.card__title').textContent = `Страница ${index + 1}`;
-    const canvasContainer = clone.querySelector('.card__canvas');
-    const previewImg = document.createElement('img');
-    previewImg.src = dataUrl;
-    previewImg.alt = file.name;
-    canvasContainer.appendChild(previewImg);
 
-    const link = clone.querySelector('a');
-    link.href = dataUrl;
-    link.download = `prepared-${file.name}`;
+    const state = {
+      name: `prepared-${file.name.replace(/\.[^.]+$/, '')}.jpg`,
+      file,
+      img,
+      localUrl: dataUrl,
+      dataUrl: null,
+      blob: null,
+      layout,
+      linkEl: clone.querySelector('a'),
+      previewImg: document.createElement('img'),
+    };
+
+    state.linkEl.download = state.name;
+    state.previewImg.alt = file.name;
+    state.previewImg.className = 'card__preview-img';
+
+    buildInteractivePreview(state, clone);
+
+    const thumbContainer = document.createElement('div');
+    thumbContainer.className = 'card__thumb';
+    thumbContainer.appendChild(state.previewImg);
+    clone.querySelector('.card').appendChild(thumbContainer);
 
     previewGrid.appendChild(clone);
+    preparedImages.push(state);
+    await updatePreparedAsset(state);
   }
 
   setStatus(`Готово: ${preparedImages.length} стр.`);
@@ -196,6 +337,13 @@ async function sendToPrint() {
   if (preparedImages.length === 0) {
     alert('Сначала нажмите «Подготовить фото».');
     return;
+  }
+
+  for (const item of preparedImages) {
+    if (!item.blob) {
+      // страхуемся, если пользователь перетаскивал фото и не дождался обновления
+      await updatePreparedAsset(item);
+    }
   }
 
   const zip = new JSZip();
